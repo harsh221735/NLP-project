@@ -5,6 +5,7 @@ import numpy as np
 import requests
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from transformers import pipeline
+from collections import Counter
 model_name = "nlptown/bert-base-multilingual-uncased-sentiment"
 sentiment_pipeline = pipeline("sentiment-analysis", model=model_name)
 
@@ -24,43 +25,53 @@ token = res.json()['access_token']
 headers['Authorization'] = f'bearer {token}'
 requests.get('https://oauth.reddit.com/api/v1/me',headers = headers)
 
-@app.route('take user input string of car',methods=['POST'])
-def search():
-    car_name = request.json['car_name']
-    params = {'q' : car_name,'restrict_sr' : 'true'}
-    res = requests.get('https://oauth.reddit.com/r/CarsIndia/search',headers = headers,params = params)
-    #to get commentssss
-    p_id = res.json()['data']['children'][0]['data']['id']
+def search(car_name):
+    params = {'q': car_name, 'restrict_sr': 'true'}
+    res = requests.get('https://oauth.reddit.com/r/CarsIndia/search', headers=headers, params=params)
+
+    posts = res.json()['data']['children']
+    if not posts:
+        return []
+
+    p_id = posts[0]['data']['id']
     url = f'https://oauth.reddit.com/comments/{p_id}'
-    res2 = requests.get(url,headers = headers) 
+    res2 = requests.get(url, headers=headers)
     comments = res2.json()[1]['data']['children']
+
     data = []
-    for post in res.json()['data']['children']:
+    for post in posts:
         for c in comments:
             data.append({
-                'subreddit' : post['data']['subreddit'],
-                'title' : post['data']['title'],
-                ' selftext' : post['data']['selftext'],
-                'comments' : c['data']['body']
+                'comments': c['data'].get('body', 'none')
             })
+
     df = pd.DataFrame(data)
+    return df['comments'].fillna('none').tolist()
 
 
-    comments = df['comments']
-    comments.fillna('none')
-    return comments
+@app.route('/sentiment', methods=['POST'])
 def analyze_sentiment():
-    comments = search()
+    car_name = request.json['car_name']
+    comments = search(car_name)
+
+    if not comments:
+        return jsonify({"message": "No comments found", "car_name": car_name})
+
     result = []
-    for i in range(len(comments)):
-        val = comments[i]
-        print(i ,end = ' ')
-        x = sentiment_pipeline(val,truncation = True)
-        result.append(int(x[0]['label'][0]))
-    final_anus = np.mean(result)
-    from collections import Counter
-    count = Counter(result)
-    return final_anus,count
+    for c in comments:
+        pred = sentiment_pipeline(c, truncation=True)
+        result.append(int(pred[0]['label'][0]))
+
+    avg_score = float(np.mean(result))
+    count = dict(Counter(result))
+
+    return jsonify({
+        "car_name": car_name,
+        "total_comments": len(comments),
+        "avg_sentiment": avg_score,
+        "count": count
+    })
+
 if __name__ == '__main__':
     app.run(debug=True)
 
