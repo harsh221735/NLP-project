@@ -12,7 +12,7 @@ sentiment_pipeline = pipeline("sentiment-analysis", model=model_name)
 client = 's3VTNg6KxB7e1tP_JykN2g'
 secret_key = '7hxghwdLBZfVmppOPmg-v41cPPY7KA'
 auth = requests.auth.HTTPBasicAuth(client,secret_key)
-with open('pw.txt','r') as f:
+with open(r'C:\Users\ADMIN\Desktop\test\NLP-project\pw.txt','r') as f:
     pw = f.read()
 data = {
     'grant_type' : 'password',
@@ -73,5 +73,5 @@ def analyze_sentiment():
     })
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True,port = 5002)
 
